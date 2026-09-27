@@ -65,4 +65,24 @@ def initialize_database():
         reminder_status TEXT NOT NULL DEFAULT 'pending'
     )
 """)
+        
+        conn.execute("""
+    CREATE TABLE IF NOT EXISTS donors (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        blood_group TEXT NOT NULL,
+        available INTEGER NOT NULL DEFAULT 1,
+        distance_km REAL NOT NULL DEFAULT 0
+    )
+""")
+
+        conn.execute("""
+    CREATE TABLE IF NOT EXISTS hospitals (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        available INTEGER NOT NULL DEFAULT 1,
+        services TEXT NOT NULL,
+        distance_km REAL NOT NULL DEFAULT 0
+    )
+""")
         conn.commit()

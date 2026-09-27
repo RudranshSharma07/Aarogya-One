@@ -7,9 +7,9 @@ from database import get_connection, initialize_database
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
+import sqlite3
+from uuid import uuid4
 from typing import Literal
-
 from emergency_service import generate_plan, load_emergency
 
 from ai.rescue_chain import build_rescue_chain
@@ -191,18 +191,18 @@ def get_exclusions(request_id):
     return declined_donors, unavailable_hospitals
 
 
+
 @app.get("/sos/{request_id}/plan")
 def get_rescue_plan(request_id: str):
     declined, unavailable = get_exclusions(request_id)
 
     return generate_plan(
         request_id,
-        donors,
-        hospitals,
+        load_donors(),
+        load_hospitals(),
         declined_donor_ids=declined,
         unavailable_hospital_ids=unavailable
     )
-
 
 
 @app.post("/sos/{request_id}/response")
@@ -592,3 +592,199 @@ def get_patient_followups(patient_id: str):
         appointments,
         medicines
     )
+
+# -------- MEDICONNECT: DONORS --------
+
+class DonorRegistration(BaseModel):
+    name: str
+    blood_group: str
+    available: bool = True
+    distance_km: float = Field(ge=0)
+
+
+class DonorAvailability(BaseModel):
+    available: bool
+
+
+@app.post("/donors", status_code=201)
+def register_donor(request: DonorRegistration):
+    donor_id = f"D-{uuid4().hex[:8].upper()}"
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO donors
+                (id, name, blood_group,
+                 available, distance_km)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                donor_id,
+                request.name,
+                request.blood_group,
+                int(request.available),
+                request.distance_km
+            )
+        )
+        conn.commit()
+
+    return {
+        "donor_id": donor_id,
+        "message": "Demo donor registered"
+    }
+
+
+@app.get("/donors")
+def list_donors():
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM donors"
+        ).fetchall()
+
+    return [
+        {
+            **dict(row),
+            "available": bool(row["available"])
+        }
+        for row in rows
+    ]
+
+
+@app.patch("/donors/{donor_id}")
+def update_donor(
+    donor_id: str,
+    request: DonorAvailability
+):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE donors
+            SET available = ?
+            WHERE id = ?
+            """,
+            (int(request.available), donor_id)
+        )
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(
+            404, "Donor not found"
+        )
+
+    return {
+        "donor_id": donor_id,
+        "available": request.available
+    }
+
+# -------- MEDICONNECT: HOSPITALS --------
+import json
+class HospitalRegistration(BaseModel):
+    name: str
+    available: bool = True
+    services: list[str]
+    distance_km: float = Field(ge=0)
+
+
+class HospitalUpdate(BaseModel):
+    available: bool
+    services: list[str]
+
+
+@app.post("/hospitals", status_code=201)
+def register_hospital(request: HospitalRegistration):
+    hospital_id = f"H-{uuid4().hex[:8].upper()}"
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO hospitals
+                (id, name, available,
+                 services, distance_km)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                hospital_id,
+                request.name,
+                int(request.available),
+                json.dumps(request.services),
+                request.distance_km
+            )
+        )
+        conn.commit()
+
+    return {"hospital_id": hospital_id}
+
+
+@app.get("/hospitals")
+def list_hospitals():
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM hospitals"
+        ).fetchall()
+
+    return [
+        {
+            **dict(row),
+            "available": bool(row["available"]),
+            "services": json.loads(row["services"])
+        }
+        for row in rows
+    ]
+
+
+@app.patch("/hospitals/{hospital_id}")
+def update_hospital(
+    hospital_id: str,
+    request: HospitalUpdate
+):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE hospitals
+            SET available = ?, services = ?
+            WHERE id = ?
+            """,
+            (
+                int(request.available),
+                json.dumps(request.services),
+                hospital_id
+            )
+        )
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(
+            404, "Hospital not found"
+        )
+
+    return {
+        "hospital_id": hospital_id,
+        "available": request.available,
+        "services": request.services
+    }
+
+def load_donors():
+    with get_connection() as conn:
+        return [
+            {
+                **dict(row),
+                "available": bool(row["available"])
+            }
+            for row in conn.execute(
+                "SELECT * FROM donors"
+            ).fetchall()
+        ]
+
+
+def load_hospitals():
+    with get_connection() as conn:
+        return [
+            {
+                **dict(row),
+                "available": bool(row["available"]),
+                "services": json.loads(row["services"])
+            }
+            for row in conn.execute(
+                "SELECT * FROM hospitals"
+            ).fetchall()
+        ]

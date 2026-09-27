@@ -71,8 +71,8 @@ def home():
 def match_emergency(request: EmergencyRequest):
     result = build_rescue_chain(
         request.model_dump(),
-        donors,
-        hospitals
+        load_donors,
+        load_hospitals
     )
     return result
 
@@ -235,7 +235,7 @@ def record_resource_response(
 
     # 3. Check that the resource exists
     resources = (
-        donors
+        load_donors
         if response.resource_type == "donor"
         else hospitals
     )
@@ -313,8 +313,14 @@ def accept_donor_request(request_id: str, donor_id: str):
     if emergency["status"] in ("completed", "cancelled"):
         raise HTTPException(409, "Request is already closed")
 
-    if not any(d["id"] == donor_id for d in donors):
-        raise HTTPException(404, "Donor not found")
+    
+    if not any(
+        d["id"] == donor_id and d["available"]
+        for d in load_donors()
+    ):
+        raise HTTPException(
+            404, "Available donor not found"
+        )
 
     declined, unavailable = get_exclusions(request_id)
 
@@ -385,7 +391,7 @@ def confirm_hospital(request_id: str, hospital_id: str):
 
     if not any(
         h["id"] == hospital_id and h["available"]
-        for h in hospitals
+        for h in load_hospitals
     ):
         raise HTTPException(
             404, "Available hospital not found"

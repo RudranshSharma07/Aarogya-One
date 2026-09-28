@@ -13,6 +13,7 @@ from typing import Literal
 from emergency_service import generate_plan, load_emergency
 
 from ai.rescue_chain import build_rescue_chain
+from healthcare.routes import router as healthcare_router
 
 app = FastAPI(title="Aarogya One API")
 
@@ -86,6 +87,7 @@ class SOSRequest(BaseModel):
 
 
 initialize_database()
+app.include_router(healthcare_router)
 
 
 @app.post("/sos", status_code=201)

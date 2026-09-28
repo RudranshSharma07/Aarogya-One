@@ -473,7 +473,6 @@ class AppointmentRequest(BaseModel):
     doctor_name: str
     consultation_link: str | None = None
 
-
 @app.post("/appointments", status_code=201)
 def create_appointment(request: AppointmentRequest):
     appointment_id = f"APT-{uuid4().hex[:8].upper()}"

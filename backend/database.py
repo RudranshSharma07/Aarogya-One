@@ -85,4 +85,9 @@ def initialize_database():
         distance_km REAL NOT NULL DEFAULT 0
     )
 """)
+
+        # Member 3: healthcare tables and extra columns (idempotent).
+        from healthcare.schema import ensure_healthcare_schema
+        ensure_healthcare_schema(conn)
+
         conn.commit()

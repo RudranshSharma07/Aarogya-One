@@ -235,9 +235,9 @@ def record_resource_response(
 
     # 3. Check that the resource exists
     resources = (
-        load_donors
-        if response.resource_type == "donor"
-        else hospitals
+    load_donors()
+    if response.resource_type == "donor"
+    else load_hospitals()
     )
 
     if not any(
@@ -391,7 +391,7 @@ def confirm_hospital(request_id: str, hospital_id: str):
 
     if not any(
         h["id"] == hospital_id and h["available"]
-        for h in load_hospitals
+        for h in load_hospitals()
     ):
         raise HTTPException(
             404, "Available hospital not found"

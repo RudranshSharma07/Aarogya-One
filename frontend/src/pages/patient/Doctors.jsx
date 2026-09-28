@@ -1,17 +1,263 @@
-import { Link } from "react-router-dom";
-import { Search, MapPin, Video, Hospital, SlidersHorizontal, Star } from "lucide-react";
-import PageHeader from "../../components/common/PageHeader";
 
-const doctors = [
-  {id:1,name:"Dr. Ananya Sharma",spec:"General Physician",qual:"MBBS, MD",place:"Aarogya Care Hospital",mode:"Online & Offline",slot:"Today · 4:30 PM"},
-  {id:2,name:"Dr. Rohan Mehta",spec:"Internal Medicine",qual:"MBBS, MD",place:"Mediconnect Clinic",mode:"Offline",slot:"Tomorrow · 10:00 AM"},
-  {id:3,name:"Dr. Priya Kapoor",spec:"Dermatologist",qual:"MBBS, MD (Dermatology)",place:"City Health Clinic",mode:"Online",slot:"Tomorrow · 2:00 PM"}
-];
+import React, { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  Search,
+  MapPin,
+  Video,
+  Hospital,
+  SlidersHorizontal,
+  Star
+} from "lucide-react";
+
+import PageHeader from "../../components/common/PageHeader";
+import { doctorsApi } from "../../services/api";
 
 export default function Doctors() {
-  return <><PageHeader title="Find a Doctor" subtitle="Explore demo doctor profiles. Real doctor directory APIs are not connected yet."/>
-    <div className="search-panel"><div className="input-wrap"><Search size={18}/><input placeholder="Search symptoms, specialty or doctor"/></div><select><option>All specialties</option><option>General Physician</option><option>Dermatologist</option><option>Internal Medicine</option></select><select><option>All modes</option><option>Online</option><option>Offline</option></select><button className="btn outline"><SlidersHorizontal size={17}/> Filters</button></div>
-    <div className="recommendation-banner"><Star size={20}/><div><b>Symptom-based recommendation</b><p>Enter your symptoms to get a specialty suggestion. This helps find care and does not diagnose disease.</p></div></div>
-    <div className="doctor-list">{doctors.map(d=><div className="doctor-card card" key={d.id}><div className="doctor-avatar">{d.name.split(" ").slice(1,2)[0]?.[0] || "D"}</div><div className="doctor-info"><h3>{d.name}</h3><b>{d.spec}</b><p>{d.qual}</p><p><Hospital size={14}/> {d.place}</p><div className="doctor-tags"><span><MapPin size={13}/> Available slot: {d.slot}</span><span><Video size={13}/> {d.mode}</span></div></div><div className="doctor-action"><span className="available">● Available</span><Link to={`/patient/doctors/${d.id}`} className="btn primary">View profile</Link></div></div>)}</div>
-  </>;
+  const [searchParams] = useSearchParams();
+
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState(
+    () => searchParams.get("search") || ""
+  );
+
+  const [specialty, setSpecialty] = useState("");
+  const [mode, setMode] = useState("");
+
+  useEffect(() => {
+    setSearch(searchParams.get("search") || "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDoctors() {
+      try {
+        const response = await doctorsApi.list();
+
+        if (active) {
+          setDoctors(
+            Array.isArray(response.data) ? response.data : []
+          );
+          setError("");
+        }
+      } catch (err) {
+        console.error("Doctors API error:", err);
+
+        if (active) {
+          setError(
+            "Unable to load doctors. Check that FastAPI is running."
+          );
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadDoctors();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const specialties = [
+    ...new Set(
+      doctors.map((d) => d.specialization).filter(Boolean)
+    )
+  ];
+
+  const filteredDoctors = doctors.filter((doctor) => {
+    const query = search.trim().toLowerCase();
+
+    const matchesSearch =
+      !query ||
+      (doctor.name || "").toLowerCase().includes(query) ||
+      (doctor.specialization || "").toLowerCase().includes(query);
+
+    const matchesSpecialty =
+      !specialty ||
+      doctor.specialization === specialty;
+
+    const matchesMode =
+      !mode ||
+      (doctor.consultation_modes || []).includes(mode);
+
+    return matchesSearch && matchesSpecialty && matchesMode;
+  });
+
+  function resetFilters() {
+    setSearch("");
+    setSpecialty("");
+    setMode("");
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Find a Doctor"
+        subtitle="Explore doctors registered on Aarogya One."
+      />
+
+      <div className="search-panel">
+        <div className="input-wrap">
+          <Search size={18} />
+
+          <input
+            type="text"
+            placeholder="Search doctor or specialty"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <select
+          value={specialty}
+          onChange={(e) => setSpecialty(e.target.value)}
+        >
+          <option value="">All specialties</option>
+
+          {specialties.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={mode}
+          onChange={(e) => setMode(e.target.value)}
+        >
+          <option value="">All modes</option>
+          <option value="online">Online</option>
+          <option value="in_person">In-person</option>
+        </select>
+
+        <button
+          type="button"
+          className="btn outline"
+          onClick={resetFilters}
+        >
+          <SlidersHorizontal size={17} />
+          Reset filters
+        </button>
+      </div>
+
+      <div className="recommendation-banner">
+        <Star size={20} />
+
+        <div>
+          <b>Symptom-based recommendation</b>
+          <p>
+            The dashboard provides basic demo specialty
+            suggestions. These are not medical diagnoses.
+          </p>
+        </div>
+      </div>
+
+      {loading && <p>Loading doctors...</p>}
+
+      {error && (
+        <p role="alert">{error}</p>
+      )}
+
+      {!loading && !error && filteredDoctors.length === 0 && (
+        <p>No doctors found for the selected filters.</p>
+      )}
+
+      {!loading && !error && (
+        <div className="doctor-list">
+          {filteredDoctors.map((doctor) => {
+            const location =
+              doctor.clinic?.name ||
+              doctor.hospital?.name ||
+              "Location not specified";
+
+            const modes = (
+              doctor.consultation_modes || []
+            )
+              .map((item) =>
+                item === "in_person"
+                  ? "In-person"
+                  : item === "online"
+                    ? "Online"
+                    : item
+              )
+              .join(" & ");
+
+            const initial =
+              doctor.name
+                ?.replace(/^Dr\.\s*/i, "")
+                .charAt(0)
+                .toUpperCase() || "D";
+
+            return (
+              <div
+                className="doctor-card card"
+                key={doctor.doctor_id}
+              >
+                <div className="doctor-avatar">
+                  {initial}
+                </div>
+
+                <div className="doctor-info">
+                  <h3>{doctor.name}</h3>
+
+                  <b>{doctor.specialization}</b>
+
+                  <p>
+                    {doctor.qualification ||
+                      "Qualification not specified"}
+                  </p>
+
+                  <p>
+                    <Hospital size={14} />
+                    {" "}{location}
+                  </p>
+
+                  <div className="doctor-tags">
+                    <span>
+                      <MapPin size={13} />
+                      {" "}View profile for appointment slots
+                    </span>
+
+                    <span>
+                      <Video size={13} />
+                      {" "}{modes || "Mode not specified"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="doctor-action">
+                  <span
+                    className={
+                      doctor.available
+                        ? "available"
+                        : "unavailable"
+                    }
+                  >
+                    {doctor.available
+                      ? "● Available"
+                      : "● Unavailable"}
+                  </span>
+
+                  <Link
+                    className="btn primary"
+                    to={`/patient/doctors/${encodeURIComponent(
+                      doctor.doctor_id
+                    )}`}
+                  >
+                    View profile
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
 }

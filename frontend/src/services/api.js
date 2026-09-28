@@ -28,7 +28,12 @@ export const sosApi = {
 };
 
 export const appointmentApi = {
-  create: (data) => api.post("/appointments", data)
+  create: (data) => api.post("/appointments", data),
+
+  list: (patientId) =>
+    api.get("/appointments", {
+      params: { patient_id: patientId }
+    })
 };
 
 export const medicineApi = {
@@ -44,4 +49,18 @@ export const matchApi = {
   create: (data) => api.post("/match", data)
 };
 
+export const clinicsApi = {
+  list: () => api.get("/clinics")
+};
+
+export const doctorsApi = {
+  list: (params = {}) => api.get("/doctors", { params })
+};
+export const doctorSlotsApi = {
+  list: (doctorId) => api.get(`/doctors/${doctorId}/slots`)
+};
+
+export const bookingApi = {
+  create: (data) => api.post("/appointments/book", data)
+};
 export default api;
